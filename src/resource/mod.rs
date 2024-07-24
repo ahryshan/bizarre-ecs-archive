@@ -5,10 +5,7 @@ use std::{
 
 use error::{ResourceError, ResourceResult};
 
-use crate::component::{
-    component_storage::{IntoStoredComponent, StoredComponent},
-    Component,
-};
+use crate::component::component_storage::{IntoStoredComponent, Storable, StoredComponent};
 
 pub mod error;
 
@@ -17,16 +14,14 @@ pub struct Resources {
     map: BTreeMap<TypeId, StoredComponent>,
 }
 
-pub trait Resource: Component {}
-
-impl<T: Component> Resource for T {}
+pub trait Resource: Storable {}
 
 impl Resources {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn insert<R: IntoStoredComponent>(&mut self, resource: R) -> ResourceResult {
+    pub fn insert<R: IntoStoredComponent + Resource>(&mut self, resource: R) -> ResourceResult {
         let resource = resource.into_stored_component();
 
         if let btree_map::Entry::Vacant(e) = self.map.entry(resource.inner_type_id()) {
@@ -40,14 +35,14 @@ impl Resources {
     pub fn get<R: Resource>(&self) -> ResourceResult<&R> {
         match self.map.get(&R::inner_type_id()) {
             Some(r) => Ok(r.downcast_ref().unwrap()),
-            None => Err(ResourceError::NotPresent(R::component_name())),
+            None => Err(ResourceError::NotPresent(R::inner_type_name())),
         }
     }
 
     pub fn get_mut<R: Resource>(&mut self) -> ResourceResult<&mut R> {
         match self.map.get_mut(&R::inner_type_id()) {
             Some(r) => Ok(r.downcast_mut().unwrap()),
-            None => Err(ResourceError::NotPresent(R::component_name())),
+            None => Err(ResourceError::NotPresent(R::inner_type_name())),
         }
     }
 
@@ -62,7 +57,7 @@ impl Resources {
 mod tests {
     use anyhow::{anyhow, Result};
 
-    use crate::test_commons::Health;
+    use crate::test_commons::Motd;
 
     use super::{error::ResourceError, Resources};
 
@@ -70,7 +65,7 @@ mod tests {
     fn should_insert_resource() -> Result<()> {
         let mut storage = Resources::new();
 
-        storage.insert(Health(100))?;
+        storage.insert(Motd("Hello, World!"))?;
 
         Ok(())
     }
@@ -79,8 +74,8 @@ mod tests {
     fn should_err_on_double_insert() -> Result<()> {
         let mut storage = Resources::new();
 
-        storage.insert(Health(100))?;
-        match storage.insert(Health(100)) {
+        storage.insert(Motd("Hello, World!"))?;
+        match storage.insert(Motd("Hello, World!")) {
             Err(ResourceError::AlreadyPresent(_)) => Ok(()),
             _ => Err(anyhow!(
                 "Expected resource storage to prevent double insert"
@@ -91,11 +86,11 @@ mod tests {
     #[test]
     fn should_get_resource() -> Result<()> {
         let mut storage = Resources::new();
-        storage.insert(Health(100))?;
+        storage.insert(Motd("Hello, World!"))?;
 
-        let health = storage.get::<Health>()?;
+        let health = storage.get::<Motd>()?;
 
-        assert!(health == &Health(100));
+        assert!(health == &Motd("Hello, World!"));
 
         Ok(())
     }
@@ -103,14 +98,14 @@ mod tests {
     #[test]
     fn should_get_resource_mut() -> Result<()> {
         let mut r = Resources::new();
-        r.insert(Health(100))?;
+        r.insert(Motd("hello world"))?;
 
-        let health = r.get_mut::<Health>()?;
+        let motd = r.get_mut::<Motd>()?;
 
-        health.0 = 200;
-        let cloned = health.clone();
+        motd.0 = "Hello, World!";
+        let cloned = motd.clone();
 
-        let health = r.get::<Health>()?;
+        let health = r.get::<Motd>()?;
 
         assert!(health == &cloned);
 
@@ -121,6 +116,6 @@ mod tests {
     #[should_panic]
     fn should_not_get_nonexistent_resource() {
         let r = Resources::new();
-        r.get::<Health>().unwrap();
+        r.get::<Motd>().unwrap();
     }
 }

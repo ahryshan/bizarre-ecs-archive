@@ -1,10 +1,13 @@
-use std::{any::TypeId, ptr};
+use std::{
+    any::{type_name, TypeId},
+    ptr,
+};
 
 use crate::entity::Entity;
 
 use super::{
     error::{ComponentError, ComponentResult},
-    Component, ComponentMarker,
+    Component,
 };
 
 pub(crate) struct StoredComponent {
@@ -13,8 +16,29 @@ pub(crate) struct StoredComponent {
     data: *mut (),
 }
 
+pub trait Storable: 'static {
+    fn inner_type_id() -> TypeId;
+    fn inner_type_name() -> &'static str;
+}
+
+pub auto trait StorableAutoMarker {}
+impl !StorableAutoMarker for StoredComponent {}
+
+impl<T> Storable for T
+where
+    T: 'static + StorableAutoMarker,
+{
+    fn inner_type_id() -> TypeId {
+        TypeId::of::<T>()
+    }
+
+    fn inner_type_name() -> &'static str {
+        type_name::<T>()
+    }
+}
+
 impl StoredComponent {
-    pub fn downcast_ref<C: Component>(&self) -> Option<&C> {
+    pub fn downcast_ref<C: Storable>(&self) -> Option<&C> {
         if C::inner_type_id() != self.type_id {
             None
         } else {
@@ -23,7 +47,7 @@ impl StoredComponent {
         }
     }
 
-    pub fn downcast_mut<C: Component>(&mut self) -> Option<&mut C> {
+    pub fn downcast_mut<C: Storable>(&mut self) -> Option<&mut C> {
         if C::inner_type_id() != self.type_id {
             None
         } else {
@@ -44,11 +68,11 @@ impl StoredComponent {
     /// If the `C` provided is different from the type the `StoredComponent` was with this function
     /// will panic
     ///
-    pub unsafe fn into_inner<C: Component>(self) -> C {
+    pub unsafe fn into_inner<C: Storable>(self) -> C {
         if C::inner_type_id() != self.inner_type_id() {
             panic!(
                 "Trying to convert a StoredComponent of type `{}` into type `{}`",
-                C::component_name(),
+                C::inner_type_name(),
                 self.name
             );
         }
@@ -64,13 +88,11 @@ impl StoredComponent {
     }
 }
 
-impl !ComponentMarker for StoredComponent {}
-
 pub trait IntoStoredComponent {
     fn into_stored_component(self) -> StoredComponent;
 }
 
-impl<C: Component> IntoStoredComponent for C {
+impl<S: Storable> IntoStoredComponent for S {
     fn into_stored_component(self) -> StoredComponent {
         let data = {
             let boxed = Box::new(self);
@@ -78,8 +100,8 @@ impl<C: Component> IntoStoredComponent for C {
         };
         StoredComponent {
             data,
-            name: C::component_name(),
-            type_id: C::inner_type_id(),
+            name: S::inner_type_name(),
+            type_id: S::inner_type_id(),
         }
     }
 }
@@ -103,7 +125,7 @@ impl ComponentStorage {
     pub fn new<C: Component>() -> Self {
         Self {
             components: Vec::new(),
-            component_name: C::component_name(),
+            component_name: C::inner_type_name(),
             type_id: TypeId::of::<C>(),
             frozen_entities: Default::default(),
             capacity: 0,
@@ -116,7 +138,7 @@ impl ComponentStorage {
         let frozen_entities = vec![Entity::from_gen_id(0, 0); capacity];
         Self {
             components,
-            component_name: C::component_name(),
+            component_name: C::inner_type_name(),
             type_id: TypeId::of::<C>(),
             frozen_entities,
             capacity,
@@ -287,7 +309,7 @@ impl ComponentStorage {
         if C::inner_type_id() != self.type_id {
             Err(ComponentError::WrongType {
                 expected: self.component_name,
-                found: C::component_name(),
+                found: C::inner_type_name(),
             })
         } else {
             Ok(())

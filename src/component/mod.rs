@@ -1,9 +1,9 @@
 use std::{
-    any::{type_name, Any, TypeId},
+    any::TypeId,
     collections::{BTreeMap, VecDeque},
 };
 
-use component_storage::{ComponentStorage, IntoStoredComponent, StoredComponent};
+use component_storage::{ComponentStorage, IntoStoredComponent, Storable, StoredComponent};
 use error::{ComponentError, ComponentResult};
 
 use crate::entity::Entity;
@@ -13,18 +13,7 @@ pub mod error;
 
 /// Trait which must be implemented for all types that will be used as a component. It has blanket
 /// implementation for all types with `'static` lifetime
-pub trait Component: Any {
-    fn component_name() -> &'static str {
-        type_name::<Self>()
-    }
-    fn inner_type_id() -> TypeId {
-        TypeId::of::<Self>()
-    }
-}
-
-pub auto trait ComponentMarker {}
-
-impl<T> Component for T where T: 'static + ComponentMarker {}
+pub(crate) trait Component: Storable {}
 
 /// Type for storing all registered and added components inside a [`World`](crate::world::World).
 #[derive(Default)]
@@ -32,7 +21,7 @@ pub struct Components {
     lookup: BTreeMap<TypeId, usize>,
     storages: Vec<ComponentStorage>,
     bitmasks: Vec<u128>,
-    entity_bitmasks: Vec<u128>,
+    entity_bitmasks: Vec<(Entity, u128)>,
     storage_capacity: usize,
     id_dumpster: VecDeque<usize>,
 }
@@ -50,7 +39,17 @@ impl Components {
         let component = component.into_stored_component();
         let index = self.get_index_for_stored(&component)?;
         self.storages[index].insert(entity, component)?;
-        self.entity_bitmasks[entity.index()] |= self.bitmasks[index];
+
+        let (stored_entity, stored_bitmask) = self.entity_bitmasks[entity.index()];
+
+        let pair = if stored_entity == entity {
+            (entity, stored_bitmask | self.bitmasks[index])
+        } else {
+            (entity, self.bitmasks[index])
+        };
+
+        self.entity_bitmasks[entity.index()] = pair;
+
         Ok(())
     }
 
@@ -71,15 +70,16 @@ impl Components {
         let index = self.get_index::<C>().ok()?;
 
         let component = self.storages[index].remove::<C>(entity);
-        self.entity_bitmasks[entity.index()] ^= self.bitmasks[index];
+        self.entity_bitmasks[entity.index()].1 ^= self.bitmasks[index];
         component
     }
 
-    pub fn remove_entity(&mut self, entity: Entity) {
+    pub fn remove_entity(&mut self, mut entity: Entity) {
         for storage in self.storages.iter_mut() {
             storage.forget_entity(entity);
         }
-        self.entity_bitmasks[entity.index()] = 0;
+        entity.clear_gen();
+        self.entity_bitmasks[entity.index()] = (entity, 0);
     }
 
     pub fn get_storage<C: Component>(&self) -> ComponentResult<&ComponentStorage> {
@@ -100,7 +100,7 @@ impl Components {
     /// Expands all underlying storages by number provided
     pub fn expand_by(&mut self, by: usize) {
         self.storage_capacity += by;
-        self.entity_bitmasks.push(0);
+        self.entity_bitmasks.push((Entity::from_gen_id(0, 1), 0));
 
         for storage in self.storages.iter_mut() {
             storage.expand_by(by)
@@ -164,7 +164,7 @@ impl Components {
         self.lookup
             .get(&C::inner_type_id())
             .copied()
-            .ok_or(ComponentError::NotPresentStorage(C::component_name()))
+            .ok_or(ComponentError::NotPresentStorage(C::inner_type_name()))
     }
 
     #[inline(always)]
@@ -172,6 +172,29 @@ impl Components {
         self.lookup.get(&component.inner_type_id()).copied().ok_or(
             ComponentError::NotPresentStorage(component.component_name()),
         )
+    }
+
+    pub fn filter_entities(&self, type_ids: &[TypeId]) -> Vec<Entity> {
+        let bitmask = type_ids.iter().fold(0, |acc, tid| {
+            let comp_mask = self
+                .lookup
+                .get(tid)
+                .map(|index| self.bitmasks[*index])
+                .unwrap_or(0);
+
+            acc | comp_mask
+        });
+
+        self.entity_bitmasks
+            .iter()
+            .filter_map(|(e, b)| {
+                if b & bitmask == bitmask {
+                    Some(*e)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 }
 
@@ -218,7 +241,11 @@ mod tests {
 
     use anyhow::Result;
 
-    use crate::{component::Component, entity::Entity, test_commons::Health};
+    use crate::{
+        component::{component_storage::Storable, Component},
+        entity::Entity,
+        test_commons::Health,
+    };
 
     use super::Components;
 
@@ -271,7 +298,7 @@ mod tests {
 
         assert!(components.storages[0].capacity() == 1);
         assert!(components.storages[0].occupied() == 1);
-        assert!(components.entity_bitmasks[0] == 1);
+        assert!(components.entity_bitmasks[0].1 == 1);
 
         Ok(())
     }
@@ -314,7 +341,7 @@ mod tests {
 
         assert!(storage.storages[0].capacity() == 1);
         assert!(storage.storages[0].occupied() == 0);
-        assert!(storage.entity_bitmasks[0] == 0);
+        assert!(storage.entity_bitmasks[0].1 == 0);
         assert!(!storage.storages[0].has_entity(entity));
 
         Ok(())
