@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::{any::TypeId, ptr};
 
 use crate::entity::Entity;
 
@@ -30,6 +30,29 @@ impl StoredComponent {
             let r = unsafe { &mut *self.data.cast() };
             Some(r)
         }
+    }
+
+    /// Returns the underlying value converted to `C`
+    ///
+    /// # Safety
+    ///
+    /// This function assumes all the safety measures for [`core::ptr::read`].
+    /// This function must be called with the same `C` as the StoredComponent was created from
+    ///
+    /// # Panics
+    ///
+    /// If the `C` provided is different from the type the `StoredComponent` was with this function
+    /// will panic
+    ///
+    pub unsafe fn into_inner<C: Component>(self) -> C {
+        if C::inner_type_id() != self.inner_type_id() {
+            panic!(
+                "Trying to convert a StoredComponent of type `{}` into type `{}`",
+                C::component_name(),
+                self.name
+            );
+        }
+        ptr::read(self.data.cast())
     }
 
     pub fn inner_type_id(&self) -> TypeId {
@@ -158,10 +181,22 @@ impl ComponentStorage {
         self.frozen_entities.contains(&entity)
     }
 
-    pub fn remove(&mut self, entity: Entity) {
+    pub fn forget_entity(&mut self, entity: Entity) {
         if self.has_entity(entity) {
             self.occupied -= 1;
             self.frozen_entities[entity.index()].clear_gen();
+        }
+    }
+
+    pub fn remove<C: Component>(&mut self, entity: Entity) -> Option<C> {
+        if self.has_entity(entity) {
+            self.occupied -= 1;
+            self.frozen_entities[entity.index()].clear_gen();
+            self.components[entity.index()]
+                .take()
+                .map(|r| unsafe { r.into_inner() })
+        } else {
+            None
         }
     }
 

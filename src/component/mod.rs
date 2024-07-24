@@ -65,18 +65,19 @@ impl Components {
         self.storages[index].get_mut(entity)
     }
 
-    pub fn remove<C: Component>(&mut self, entity: Entity) -> ComponentResult {
-        let index = self.get_index::<C>()?;
+    /// Removes a component for the entity returning the value if the component was previously
+    /// assigned for entity
+    pub fn remove<C: Component>(&mut self, entity: Entity) -> Option<C> {
+        let index = self.get_index::<C>().ok()?;
 
-        self.storages[index].remove(entity);
+        let component = self.storages[index].remove::<C>(entity);
         self.entity_bitmasks[entity.index()] ^= self.bitmasks[index];
-
-        Ok(())
+        component
     }
 
     pub fn remove_entity(&mut self, entity: Entity) {
         for storage in self.storages.iter_mut() {
-            storage.remove(entity);
+            storage.forget_entity(entity);
         }
         self.entity_bitmasks[entity.index()] = 0;
     }
@@ -142,7 +143,7 @@ impl Components {
     ///
     /// If there is no storage for the `C` to begin with, it won't do anything
     ///
-    pub fn remove_storage<C: Component>(&mut self) {
+    pub fn unregister<C: Component>(&mut self) {
         let index = if let Ok(index) = self.get_index::<C>() {
             index
         } else {
@@ -217,7 +218,7 @@ mod tests {
 
     use anyhow::Result;
 
-    use crate::{entity::Entity, test_commons::Health};
+    use crate::{component::Component, entity::Entity, test_commons::Health};
 
     use super::Components;
 
@@ -230,6 +231,16 @@ mod tests {
         assert!(components.lookup.get(&TypeId::of::<Health>()) == Some(0).as_ref());
         assert!(components.storages[0].capacity() == 0);
         assert!(components.storages[0].occupied() == 0);
+        assert!(components.bitmasks[0] == 1);
+    }
+
+    #[test]
+    fn should_unregister_component() {
+        let mut components = Components::new();
+        components.register::<Health>();
+        components.unregister::<Health>();
+
+        assert!(!components.lookup.contains_key(&Health::inner_type_id()));
     }
 
     #[test]
@@ -260,6 +271,7 @@ mod tests {
 
         assert!(components.storages[0].capacity() == 1);
         assert!(components.storages[0].occupied() == 1);
+        assert!(components.entity_bitmasks[0] == 1);
 
         Ok(())
     }
@@ -302,7 +314,7 @@ mod tests {
 
         assert!(storage.storages[0].capacity() == 1);
         assert!(storage.storages[0].occupied() == 0);
-
+        assert!(storage.entity_bitmasks[0] == 0);
         assert!(!storage.storages[0].has_entity(entity));
 
         Ok(())
