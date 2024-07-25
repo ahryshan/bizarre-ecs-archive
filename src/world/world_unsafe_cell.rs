@@ -14,7 +14,7 @@ impl<'w> UnsafeWorldCell<'w> {
         self.0.as_ref().unwrap()
     }
 
-    pub unsafe fn get_mut(&'w mut self) -> &'w mut World {
+    pub unsafe fn get_mut(&'w self) -> &'w mut World {
         self.0.as_mut().unwrap()
     }
 }

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use query_data::QueryData;
 use query_iterator::QueryIterator;
 
-use crate::world::{world_unsafe_cell::UnsafeWorldCell, World};
+use crate::world::World;
 
 pub mod fetch;
 pub mod query_data;

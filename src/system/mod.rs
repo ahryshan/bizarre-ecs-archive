@@ -3,30 +3,60 @@ use crate::{
     world::{world_unsafe_cell::UnsafeWorldCell, World},
 };
 
+pub mod error;
+
 pub trait System {
     type QueryData<'q>: QueryData<'q>;
 
+    fn init(&mut self, world: &mut World) {
+        let _ = world;
+    }
     fn run<'q>(&mut self, query: Query<'q, Self::QueryData<'q>>);
+    fn dispose(&mut self, world: &mut World) {
+        let _ = world;
+    }
 }
 
-pub trait RunFn = Fn(*mut (), UnsafeWorldCell);
+trait RunFn = Fn(*mut (), UnsafeWorldCell);
+trait InitFn = Fn(*mut (), UnsafeWorldCell);
+trait DisposeFn = Fn(*mut (), UnsafeWorldCell);
 
 pub struct StoredSystem {
     state: *mut (),
+    init_fn: Box<dyn InitFn>,
     run_fn: Box<dyn RunFn>,
+    dispose_fn: Box<dyn DisposeFn>,
 }
 
 impl StoredSystem {
+    pub fn init(&mut self, world: &mut World) {
+        let cell = unsafe { UnsafeWorldCell::new(world) };
+        (self.init_fn)(self.state, cell);
+    }
+
     pub fn run(&mut self, world: &World) {
         let cell = unsafe { UnsafeWorldCell::new(world) };
         (self.run_fn)(self.state, cell)
     }
 
-    pub fn from_system<S: System>(system: S) -> Self {
+    pub fn dispose(&mut self, world: &mut World) {
+        let cell = unsafe { UnsafeWorldCell::new(world) };
+        (self.dispose_fn)(self.state, cell)
+    }
+
+    pub(crate) fn from_system<S: System>(system: S) -> Self {
         let state = {
             let boxed = Box::new(system);
             Box::into_raw(boxed) as *mut _
         };
+
+        let init_fn = |this: *mut (), world: UnsafeWorldCell| {
+            let (this, world) = unsafe { (&mut *this.cast(), world.get_mut()) };
+
+            S::init(this, world)
+        };
+
+        let init_fn = Box::new(init_fn);
 
         let run_fn = |this: *mut (), world: UnsafeWorldCell| {
             let (this, world) = unsafe { (&mut *this.cast(), world.get()) };
@@ -38,7 +68,20 @@ impl StoredSystem {
 
         let run_fn = Box::new(run_fn);
 
-        Self { state, run_fn }
+        let dispose_fn = |this: *mut (), world: UnsafeWorldCell| {
+            let (this, world) = unsafe { (&mut *this.cast(), world.get_mut()) };
+
+            S::dispose(this, world);
+        };
+
+        let dispose_fn = Box::new(dispose_fn);
+
+        Self {
+            state,
+            init_fn,
+            run_fn,
+            dispose_fn,
+        }
     }
 }
 

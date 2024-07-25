@@ -11,9 +11,8 @@ use crate::entity::Entity;
 pub mod component_storage;
 pub mod error;
 
-/// Trait which must be implemented for all types that will be used as a component. It has blanket
-/// implementation for all types with `'static` lifetime
-pub(crate) trait Component: Storable {}
+/// A marker trait that must be implemented for all types used as components
+pub trait Component: Storable {}
 
 /// Type for storing all registered and added components inside a [`World`](crate::world::World).
 #[derive(Default)]

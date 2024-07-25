@@ -14,6 +14,7 @@ pub struct Resources {
     map: BTreeMap<TypeId, StoredComponent>,
 }
 
+/// A marker trait that must be implemented for all types used as resources
 pub trait Resource: Storable {}
 
 impl Resources {

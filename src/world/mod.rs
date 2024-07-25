@@ -1,10 +1,9 @@
-use world_unsafe_cell::UnsafeWorldCell;
-
 use crate::{
     component::{error::ComponentResult, Component, Components},
     entity::{builder::EntityBuilder, entities::Entities, error::EntityResult, Entity},
     query::{query_data::QueryData, Query},
     resource::{error::ResourceResult, Resource, Resources},
+    system::{error::SystemResult, StoredSystem, System},
 };
 
 pub mod world_unsafe_cell;
@@ -14,6 +13,7 @@ pub struct World {
     pub(crate) entities: Entities,
     pub(crate) components: Components,
     pub(crate) resources: Resources,
+    pub(crate) systems: Vec<StoredSystem>,
 }
 
 impl World {
@@ -75,6 +75,12 @@ impl World {
 
     pub fn query<'q, D: QueryData<'q>>(&'q self) -> Query<'q, D> {
         Query::new(self)
+    }
+
+    pub fn add_system(&mut self, system: impl System, name: impl Into<Box<str>>) -> SystemResult {
+        let _ = name;
+        self.systems.push(StoredSystem::from_system(system));
+        Ok(())
     }
 }
 

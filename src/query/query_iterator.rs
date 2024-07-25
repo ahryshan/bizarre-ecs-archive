@@ -1,9 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{
-    entity::Entity,
-    world::{world_unsafe_cell::UnsafeWorldCell, World},
-};
+use crate::{entity::Entity, world::World};
 
 use super::query_data::QueryData;
 

@@ -10,7 +10,7 @@ use super::{
     Component,
 };
 
-pub(crate) struct StoredComponent {
+pub struct StoredComponent {
     type_id: TypeId,
     name: &'static str,
     data: *mut (),
@@ -121,6 +121,7 @@ pub struct ComponentStorage {
     occupied: usize,
 }
 
+#[allow(dead_code)]
 impl ComponentStorage {
     pub fn new<C: Component>() -> Self {
         Self {

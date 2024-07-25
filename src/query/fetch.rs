@@ -1,10 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{
-    component::Component,
-    entity::Entity,
-    world::{world_unsafe_cell::UnsafeWorldCell, World},
-};
+use crate::{component::Component, entity::Entity, world::World};
 
 use super::query_element::QueryElement;
 

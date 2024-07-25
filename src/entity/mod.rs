@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use crate::query::query_element::QueryElement;
+
 pub mod builder;
 pub mod entities;
 pub mod error;
@@ -49,5 +51,18 @@ impl Entity {
 impl Debug for Entity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Entity(id: {}, gen: {})", self.id(), self.gen())
+    }
+}
+
+impl<'q> QueryElement<'q> for Entity {
+    type Item = Entity;
+
+    fn inner_type_id() -> Option<std::any::TypeId> {
+        None
+    }
+
+    fn get_item(world: &'q crate::world::World, entity: Entity) -> Self::Item {
+        let _ = world;
+        entity
     }
 }
