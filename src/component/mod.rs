@@ -59,7 +59,7 @@ impl Components {
         self.storages[index].get(entity)
     }
 
-    pub fn get_mut<C: Component>(&mut self, entity: Entity) -> ComponentResult<&mut C> {
+    pub fn get_mut<C: Component>(&self, entity: Entity) -> ComponentResult<&mut C> {
         let index = self.get_index::<C>()?;
         self.storages[index].get_mut(entity)
     }

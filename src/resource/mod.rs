@@ -39,8 +39,8 @@ impl Resources {
         }
     }
 
-    pub fn get_mut<R: Resource>(&mut self) -> ResourceResult<&mut R> {
-        match self.map.get_mut(&R::inner_type_id()) {
+    pub fn get_mut<R: Resource>(&self) -> ResourceResult<&mut R> {
+        match self.map.get(&R::inner_type_id()) {
             Some(r) => Ok(r.downcast_mut().unwrap()),
             None => Err(ResourceError::NotPresent(R::inner_type_name())),
         }

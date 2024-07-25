@@ -1,9 +1,13 @@
+use world_unsafe_cell::UnsafeWorldCell;
+
 use crate::{
     component::{error::ComponentResult, Component, Components},
     entity::{builder::EntityBuilder, entities::Entities, error::EntityResult, Entity},
     query::{query_data::QueryData, Query},
     resource::{error::ResourceResult, Resource, Resources},
 };
+
+pub mod world_unsafe_cell;
 
 #[derive(Default)]
 pub struct World {
@@ -69,7 +73,7 @@ impl World {
         self.resources.remove()
     }
 
-    pub fn query<'q, D: QueryData<'q>>(&'q mut self) -> Query<'q, D> {
+    pub fn query<'q, D: QueryData<'q>>(&'q self) -> Query<'q, D> {
         Query::new(self)
     }
 }
@@ -77,7 +81,12 @@ impl World {
 #[cfg(test)]
 mod test {
     use crate::{
-        query::{fetch::Fetch, res::Res, Query},
+        query::{
+            fetch::{Fetch, FetchMut},
+            res::{Res, ResMut},
+            Query,
+        },
+        resource::Resource,
         test_commons::{Health, Mana, Motd},
     };
 
@@ -143,6 +152,9 @@ mod test {
         let mut world = World::new();
 
         world.spawn().with_component(Health(100)).build();
+        world.spawn().with_component(Health(400)).build();
+        world.spawn().with_component(Health(300)).build();
+        world.spawn().with_component(Health(200)).build();
 
         world.insert_resource(Motd("Hello, World!")).unwrap();
 
@@ -151,7 +163,95 @@ mod test {
         for (health, motd) in query {
             eprintln!("({health:?}, {motd:?})");
         }
+    }
 
-        panic!()
+    #[test]
+    fn should_query_for_component_mut() {
+        let mut world = World::new();
+
+        world.spawn().with_component(Health(100)).build();
+        world.spawn().with_component(Health(200)).build();
+        world.spawn().with_component(Health(300)).build();
+
+        let query: Query<FetchMut<Health>> = world.query();
+
+        for health in query {
+            health.0 *= 2;
+        }
+
+        let query: Query<Fetch<Health>> = world.query();
+
+        let components = query.into_iter().collect::<Vec<_>>();
+
+        if let [&Health(200), &Health(400), &Health(600)] = components.as_slice() {
+            eprintln!("{components:?}");
+        } else {
+            panic!()
+        }
+    }
+
+    #[test]
+    fn should_query_for_nonmut_and_mut_components() {
+        let mut world = World::new();
+
+        world
+            .spawn()
+            .with_component(Health(100))
+            .with_component(Mana(1000))
+            .build();
+        world
+            .spawn()
+            .with_component(Health(200))
+            .with_component(Mana(1200))
+            .build();
+        world
+            .spawn()
+            .with_component(Health(300))
+            .with_component(Mana(99))
+            .build();
+
+        let query: Query<(FetchMut<Health>, Fetch<Mana>)> = world.query();
+
+        for (health, mana) in query {
+            if mana.0 >= 1000 {
+                health.0 *= 2;
+            }
+        }
+
+        let query: Query<Fetch<Health>> = world.query();
+
+        let components = query.into_iter().collect::<Vec<_>>();
+
+        if let [&Health(200), &Health(400), &Health(300)] = components.as_slice() {
+            eprintln!("{components:?}");
+        } else {
+            panic!()
+        }
+    }
+
+    #[derive(Debug, Default, PartialEq, PartialOrd, Eq, Ord)]
+    struct HealthSum(usize);
+
+    impl Resource for HealthSum {}
+
+    #[test]
+    fn should_query_for_components_and_mut_resources() {
+        let mut world = World::new();
+
+        world.spawn().with_component(Health(100)).build();
+        world.spawn().with_component(Health(200)).build();
+        world.spawn().with_component(Health(300)).build();
+
+        world.insert_resource(HealthSum(0)).unwrap();
+
+        let query: Query<(Fetch<Health>, ResMut<HealthSum>)> = world.query();
+
+        for (health, sum) in query {
+            sum.0 += health.0;
+        }
+
+        let sum = world.get_resource::<HealthSum>().unwrap();
+
+        assert!(sum.0 == 600);
     }
 }

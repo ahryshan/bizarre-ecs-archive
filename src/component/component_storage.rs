@@ -47,7 +47,7 @@ impl StoredComponent {
         }
     }
 
-    pub fn downcast_mut<C: Storable>(&mut self) -> Option<&mut C> {
+    pub fn downcast_mut<C: Storable>(&self) -> Option<&mut C> {
         if C::inner_type_id() != self.type_id {
             None
         } else {
@@ -284,10 +284,10 @@ impl ComponentStorage {
         Ok(component.downcast_ref().unwrap())
     }
 
-    pub fn get_mut<C: Component>(&mut self, entity: Entity) -> ComponentResult<&mut C> {
+    pub fn get_mut<C: Component>(&self, entity: Entity) -> ComponentResult<&mut C> {
         self.check_type_id::<C>()?;
 
-        let component = self.get_raw_mut(entity)?;
+        let component = self.get_raw(entity)?;
 
         Ok(component.downcast_mut().unwrap())
     }

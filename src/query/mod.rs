@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use query_data::QueryData;
 use query_iterator::QueryIterator;
 
-use crate::world::World;
+use crate::world::{world_unsafe_cell::UnsafeWorldCell, World};
 
 pub mod fetch;
 pub mod query_data;
@@ -12,12 +12,12 @@ pub mod query_iterator;
 pub mod res;
 
 pub struct Query<'q, D: QueryData<'q>> {
-    world: &'q mut World,
-    _phantom: PhantomData<D>,
+    world: &'q World,
+    _phantom: PhantomData<&'q D>,
 }
 
 impl<'q, D: QueryData<'q>> Query<'q, D> {
-    pub fn new(world: &'q mut World) -> Self {
+    pub fn new(world: &'q World) -> Self {
         Self {
             world,
             _phantom: PhantomData,

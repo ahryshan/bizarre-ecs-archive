@@ -1,6 +1,9 @@
 use std::any::TypeId;
 
-use crate::{entity::Entity, world::World};
+use crate::{
+    entity::Entity,
+    world::{world_unsafe_cell::UnsafeWorldCell, World},
+};
 
 pub trait QueryElement<'q> {
     type Item;

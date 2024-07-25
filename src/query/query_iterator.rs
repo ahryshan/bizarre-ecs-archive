@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 
-use crate::{entity::Entity, world::World};
+use crate::{
+    entity::Entity,
+    world::{world_unsafe_cell::UnsafeWorldCell, World},
+};
 
 use super::query_data::QueryData;
 
@@ -11,7 +14,7 @@ where
     world: &'q World,
     entities: Vec<Entity>,
     index: usize,
-    _phantom: PhantomData<T>,
+    _phantom: PhantomData<&'q T>,
 }
 
 impl<'q, T> QueryIterator<'q, T>
