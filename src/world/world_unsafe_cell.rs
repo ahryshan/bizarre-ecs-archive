@@ -1,20 +1,20 @@
-use std::ptr;
+use std::{marker::PhantomData, ptr};
 
 use super::World;
 
 #[derive(Clone, Copy)]
-pub struct UnsafeWorldCell(*mut World);
+pub struct UnsafeWorldCell<'w>(*mut World, PhantomData<&'w World>);
 
-impl UnsafeWorldCell {
-    pub unsafe fn new(world: &World) -> Self {
-        Self(ptr::from_ref(world).cast_mut())
+impl<'w> UnsafeWorldCell<'w> {
+    pub unsafe fn new(world: &'w World) -> Self {
+        Self(ptr::from_ref(world).cast_mut(), PhantomData)
     }
 
-    pub unsafe fn get(&self) -> &World {
+    pub unsafe fn get(&'w self) -> &'w World {
         self.0.as_ref().unwrap()
     }
 
-    pub unsafe fn get_mut(&mut self) -> &mut World {
+    pub unsafe fn get_mut(&'w mut self) -> &'w mut World {
         self.0.as_mut().unwrap()
     }
 }

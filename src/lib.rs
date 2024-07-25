@@ -7,20 +7,8 @@ mod component;
 mod entity;
 mod query;
 mod resource;
+mod system;
 mod world;
 
 #[cfg(test)]
 mod test_commons;
-
-#[marker]
-pub trait ResourceType {}
-
-pub trait Queryable {
-    type ResourceType: ResourceType;
-}
-
-pub struct Component;
-pub struct Resource;
-
-impl ResourceType for Component {}
-impl ResourceType for Resource {}
